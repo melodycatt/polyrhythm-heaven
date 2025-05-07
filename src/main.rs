@@ -17,18 +17,18 @@ use ggez::{
     GameResult
 };
 
-use augh::vectors::Vector;
+use vectors::Vector;
 
 fn main() {
     // Make a Context.
     let (mut ctx, event_loop) = ContextBuilder::new("my_game", "Cool Game Author")
-        .window_mode(WindowMode::default().dimensions(1000.0, 1000.0).borderless(true))
+        .window_mode(WindowMode::default().dimensions(1000.0, 1000.0).borderless(false))
         .window_setup(WindowSetup::default().vsync(false))
         .build()
         .expect("aieee, could not create ggez context!");
 
 
-    let my_game = MyGame::new(&mut ctx, false, 5, 1.0);
+    let my_game = MyGame::new(&mut ctx, false, 100, 3.0, false, 1600.0, 500.0);
 
     // Run!
     event::run(ctx, event_loop, my_game);
@@ -40,6 +40,8 @@ struct MyGame {
     indices: Vec<usize>,
     distances: Vec<f64>,
 
+    apex: bool,
+
     _stream: OutputStream,
     stream_handle: OutputStreamHandle,
     freqs: Vec<TakeDuration<Amplify<SineWave>>>
@@ -48,26 +50,32 @@ struct MyGame {
 
 
 impl MyGame {
-    pub fn new(_ctx: &mut Context, sync: bool, n: i32, speed: f64) -> MyGame {
+    pub fn new(_ctx: &mut Context, sync: bool, n: i32, speed: f64, apex: bool, max_freq: f32, min_freq: f32) -> MyGame {
         let mut circumradius = 1.0;
         let mut verts: Vec<Vec<Vector<f64>>> = vec![vec![]];
         for i in 0..3 {
             verts[0].push(Vector::magnitude_angle(2.0 * PI / 3.0 * i as f64 + PI, circumradius));
         }
         let mut freqs: Vec<TakeDuration<Amplify<SineWave>>> = vec![];    
-        let freq = 1600.0 / n as f32;
-        freqs.push(SineWave::new(400.0).amplify(0.02).take_duration(Duration::from_millis(200)));
+        let freq = max_freq / n as f32;
+        freqs.push(SineWave::new(min_freq).amplify(0.07).take_duration(Duration::from_millis(200)));
+        println!("{:?}", freqs[0].sample_rate());
         for n in 4..=n+2 {
             circumradius *= ((PI / n as f64).tan().powi(2) + 1.0).sqrt();
             let mut poly_verts: Vec<Vector<f64>> = vec![];
             for i in 0..n {
                 poly_verts.push(Vector::magnitude_angle(2.0 * PI / n as f64 * i as f64 + PI, circumradius));
             }    
-            freqs.push(SineWave::new((n - 2) as f32 * freq + 400.0).amplify(0.02).take_duration(Duration::from_millis(200)));
+            freqs.push(SineWave::new((n - 3) as f32 * freq + min_freq).amplify(0.07).take_duration(Duration::from_millis(200)));
             verts.push(poly_verts);
         }
 
         let (_stream, stream_handle) = OutputStream::try_default().unwrap();
+        
+        //let s = SineWave::new(600.0).amplify(0.07).take_duration(Duration::from_millis(200));
+        //let sink = rodio::Sink::try_new(&stream_handle).unwrap();
+        //sink.append(s);
+        //sink.detach();
         MyGame {
             pos: verts.iter().map(|x| x[0]).collect(),
             indices: verts.iter().map(|_| 0).collect(),
@@ -75,6 +83,8 @@ impl MyGame {
                 x[0].distance(x[1]) * if sync { x.len() as f64 * speed } else { 6.5 * speed }
             }).collect(),
             verts,
+
+            apex,
 
             _stream,
             stream_handle,
@@ -94,7 +104,7 @@ impl EventHandler for MyGame {
                 if time > d {
                     self.pos[i] = self.pos[i].move_towards(self.verts[i][self.indices[i]], time - d);
                 }
-                if self.indices[i] == 1 {
+                if self.indices[i] == 1 || self.apex {
                     let s = self.freqs[i].clone();
                     let sink = rodio::Sink::try_new(&self.stream_handle).unwrap();
                     sink.append(s);
