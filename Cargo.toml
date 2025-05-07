@@ -1,0 +1,10 @@
+[package]
+name = "augh"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+ggez = "0.9.3"
+hsv = "0.1.1"
+num = "0.4.3"
+rodio = "0.17.0"
